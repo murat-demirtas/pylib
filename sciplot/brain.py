@@ -4,7 +4,7 @@ from copy import copy
 from matplotlib import cm
 import matplotlib.colors as clrs
 import os
-from utils.cifti import Gifti, Cifti
+from mri.cifti import Gifti, Cifti
 
 class Brain():
     def __init__(self, ax, surface='inflated', parc='cole', subcortex=False):
@@ -59,20 +59,23 @@ class Brain():
             self.groups = {'L': np.where(hemis == 0.0)[0],
                            'R': np.where(hemis == 1.0)[0]}
 
+        #zoom = [180.0, 175.0, 200.0, 200.0, 225.0, 225.0]
+        zoom = [170.0, 180.0, 200.0, 200.0, 225.0, 225.0]
+
         self.views = {'L':
-                          {'medial': [0.0, -90.0, 169.0],
-                           'sagittal': [0.0, 90.0, 152.5],
-                           'ventral': [90.0, 90.0, 200.0],
-                           'dorsal': [-90.0, 90.0, 200.0],
-                           'top': [0.0, 0.0, 225.0],
-                           'bottom': [0.0, 180.0, 225.0]},
+                          {'medial': [0.0, -90.0, zoom[0]],
+                           'sagittal': [0.0, 90.0, zoom[1]],
+                           'ventral': [90.0, 90.0, zoom[2]],
+                           'dorsal': [-90.0, 90.0, zoom[3]],
+                           'top': [0.0, 0.0, zoom[4]],
+                           'bottom': [0.0, 180.0, zoom[5]]},
                       'R':
-                          {'medial': [0.0, 90.0, 169.0],
-                           'sagittal': [0.0, -90.0, 152.5],
-                           'ventral': [90.0, 90.0, 200.0],
-                           'dorsal': [-90.0, 90.0, 200.0],
-                           'top': [0.0, 0.0, 225.0],
-                           'bottom': [0.0, 180.0, 225.0]}}
+                          {'medial': [0.0, 90.0, zoom[0]],
+                           'sagittal': [0.0, -90.0, zoom[1]],
+                           'ventral': [90.0, 90.0, zoom[2]],
+                           'dorsal': [-90.0, 90.0, zoom[3]],
+                           'top': [0.0, 0.0, zoom[4]],
+                           'bottom': [0.0, 180.0, zoom[5]]}}
 
         self.hemi_sign = {'L': 1.0, 'R': -1}
 
@@ -88,11 +91,11 @@ class Brain():
             affine_vect = np.array([1.0, -135.0, 126.0, 72.0])/N
             # Left hemisphere
             self.vertices['L'] = self.vertices['L'] * affine_vect[0] + affine_vect[1] * a[0] + affine_vect[2] * a[1] + affine_vect[3] * a[2]
-            self.vertices['L'][:, 0] *= -1.0
+            #self.vertices['L'][:, 0] *= -1.0
             # Right hemisphere
             affine_vect = np.array([1.0, -45.0, 126.0, 72.0])/N
             self.vertices['R'] = self.vertices['R'] * affine_vect[0] + affine_vect[1] * a[0] + affine_vect[2] * a[1] + affine_vect[3] * a[2]
-            self.vertices['R'][:, 0] *= -1.0
+            #self.vertices['R'][:, 0] *= -1.0
 
     def transform(self, data, affine):
         '''
@@ -111,6 +114,7 @@ class Brain():
         self.data_range = {'L': [-1, self.scalars_array['L'].max()],
                            'R': [-1, self.scalars_array['R'].max()]}
 
+        #import pdb; pdb.set_trace()
         nullcolor = copy(self.colormap[:2,:])
         if self.vrange is None:
             self.datamin = data.min()

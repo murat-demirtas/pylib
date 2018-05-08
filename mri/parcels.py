@@ -12,7 +12,8 @@ class Parcel():
 
         self.parcel = pd.read_excel(self.template_path  + parc + '.xlsx')
 
-        if not subcortex: self.parcel[self.parcel.surface=='cortex'].reset_index(drop=True)
+        if not subcortex:
+            self.parcel = self.parcel[self.parcel.surface=='cortex'].reset_index(drop=True)
         self.n = len(self.parcel)
 
         self.order = None

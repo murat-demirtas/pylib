@@ -1,6 +1,6 @@
 #! usr/bin/python
 import numpy as np
-from scipy.signal import gaussian, butter, filtfilt
+from scipy.signal import gaussian, butter, filtfilt, welch
 
 def get_freq(x, fs):
     freqs = np.fft.fftfreq(x, fs)
@@ -31,15 +31,29 @@ def bandpass(x, fs, flp=0.04, fhp=0.07, order=2):
 
 
 def powerspectrum(data, N, fs, smooth=True):
-    freqs, idx = get_freq(N, fs)
-    power = np.abs(np.fft.fft(data)) ** 2
-    power = power[idx]
-    if smooth:
-        kernel = gaussian_kernel(power.shape[0])
-        power = np.convolve(power, kernel, 'same')
-        #for ii in range(len(self._power)):
-        #    self._power[ii] = np.convolve(self._power[ii], self._gauss, 'same')
-    return power, freqs
+    #freqs, idx = get_freq(N, fs)
+    if data.ndim > 1:
+        freqs, power = welch(data, fs=fs, axis=1, nperseg=N/2, noverlap=N/4)
+        #power = np.abs(np.fft.fft(data)) ** 2
+        #power = power[idx]
+        #import pdb; pdb.set_trace()
+        #power = power[:,:N/2]
+        if smooth:
+            kernel = gaussian_kernel(power.shape[0])
+            #power = np.convolve(power, kernel, 'same')
+            for ii in range(len(power)):
+                power[ii] = np.convolve(power[ii], kernel, 'same')
+        return power[:,1:], freqs[1:]
+    else:
+        freqs, power = welch(data, fs=fs, nperseg=N/2, noverlap=N/4)
+        power = power[1:]
+        if smooth:
+            kernel = gaussian_kernel(power.shape[0])
+            # power = np.convolve(power, kernel, 'same')
+            #for ii in range(len(power)):
+            power = np.convolve(power, kernel, 'same')
+        return power, freqs[1:]
+
 
 
 """

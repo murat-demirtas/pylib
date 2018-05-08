@@ -13,18 +13,18 @@ import numpy as np
 from collections import Iterable
 import sympy as sym
 
-#from time import time
-
 class Model(object):
-    def __init__(self, C, G=0, GI=0, bold='obata', params=None, verbose=True,
-                 norm_sc=True, myelin = None, thickness = None, gradient='forward', rec_scale=(0.15, 0.), ee_scale=(0.15, 0.), ei_scale=(0.15, 0.),
-                 FFI_scale = 0., FFI = None):
+    def __init__(self, C, G=0, G_net=1., GI=0, bold='obata', params=None, verbose=True,
+                 norm_sc=True, myelin = None, thickness = None, gradient_dir='forward',
+                 rec_scale=(0.15, 0.), ee_scale=(0.15, 0.), ei_scale=(0.15, 0.),
+                 FFI_scale = 0., FFI_scale_net = 1., network_mask = None):
 
         self.withdelays = False
         # Structural connectivity / number of cortical areas
         if type(C) == int:
-            self._SC = None
+            self._SC = np.ones((C, C))
             self._nc = C
+            for ii in range(C): self._SC[ii,ii] = 0.0
         elif type(C) == np.ndarray:
             self._SC = C
             self._nc = C.shape[0]
@@ -36,6 +36,7 @@ class Model(object):
 
         # Global coupling
         self._G = G
+        self._G_net = G_net
         self._lambda = GI
 
         # Print diagnostics to console
@@ -109,6 +110,10 @@ class Model(object):
         self._r_E_ss = np.repeat(model_params['r_E_ss'], self._nc)
         self._r_I_ss = np.repeat(model_params['r_I_ss'], self._nc)
 
+        self._I_E_ss0 = np.repeat(model_params['I_E_ss'], self._nc)
+        self._S_E_ss0 = np.repeat(model_params['S_E_ss'], self._nc)
+        self._r_E_ss0 = np.repeat(model_params['r_E_ss'], self._nc)
+
         # Noise covariance matrix
         self._Q = np.identity(2 * self._nc) * self._sigma * self._sigma
 
@@ -118,7 +123,18 @@ class Model(object):
         # Feedforward inhibitory projection coupling strength,
         # and inter-network connectivity matrix
         self._FFI_scale = FFI_scale
-        self._FFI = FFI if FFI is not None else np.zeros((self._nc, self._nc))
+        if network_mask is None:
+            self._network_mask = np.ones((self._nc, self._nc))
+            self._FFE = np.ones((self._nc, self._nc))
+            self._FFI = np.ones((self._nc, self._nc))
+        else:
+            self._network_mask = network_mask
+            self._FFE = 1.0 - network_mask * (1.0 - self._G_net)
+            self._FFI = 1.0 - (1.0 - network_mask) * (1.0 - FFI_scale_net)
+
+
+        #self._FFI = network_mask if network_mask is not None else np.ones((self._nc, self._nc))
+        #self._FFE = np.ones((self._nc, self._nc))
 
         # Myelin values for each area are used to
         # parametrize excitatory recurrent strength.
@@ -134,12 +150,16 @@ class Model(object):
         self._ee_scale = ee_scale
         self._ei_scale = ei_scale
 
-        self._sc_norm = 1.0
+        self._sc_norm_E = 1.0
+        self._sc_norm_I = 1.0
         if norm_sc:
-            self._sc_norm = 1. / self._SC.sum(1)
+            self._sc_norm_E = 1. / self._SC.sum(1)
+            self._sc_norm_I = 1. / self._SC.sum(1)
+
+        self._w_EE = 1.0
 
         if myelin is not None:
-            if gradient == 'forward':
+            if gradient_dir == 'forward':
                 myelin_range = np.ptp(self._myelin)
                 self._hierarchy_gradient = (-(self._myelin - np.max(self._myelin)) / myelin_range)
 
@@ -202,9 +222,22 @@ class Model(object):
         rebalance-FIC if necessary """
         eye = np.identity(self._nc)
 
+        #if self._G_net is not None:
+        #    self._FFE = 1.0 - self._FFI * (1.0 - self._G_net)
+
+        if not isinstance(self._sc_norm_E, float):
+            self._sc_norm_E = 1. / (self._FFE * self._SC).sum(1)
+            self._sc_norm_I = 1. / (self._FFI * self._SC).sum(1)
+
+        #import pdb; pdb.set_trace()
         # Connectivity
-        self._K_EE = (self._J_NMDA_rec * self._w_EE * eye) + (self._G * self._J_NMDA_EE * self._sc_norm * self._SC).T
-        self._K_EI = (self._J_NMDA_EI * eye) + (self._G * self._FFI_scale * self._J_NMDA_EI * self._sc_norm * self._FFI.dot(self._SC))
+        #import pdb; pdb.set_trace()
+        self._K_EE = (self._J_NMDA_rec * self._w_EE * eye) + (self._G * self._J_NMDA_EE * self._sc_norm_E * self._FFE * self._SC).T
+        #self._K_EE = (self._J_NMDA_rec * self._w_EE * eye) + (self._G * self._J_NMDA_EE * self._sc_norm * self._SC).T
+        #self._K_EI = (self._J_NMDA_EI * eye) + (self._G * self._FFI_scale * 0.15 * self._sc_norm * self._FFI.dot(self._SC))
+        #self._K_EI = (self._J_NMDA_EI * eye) + (self._G * self._FFI_scale * self._J_NMDA_EI * self._sc_norm * self._SC)
+        self._K_EI = (self._J_NMDA_EI * eye) + (self._G * self._FFI_scale * 0.15 * self._sc_norm_I * self._FFI * self._SC)
+
         if compute_FIC:
             self._J = self._analytic_FIC()
         else:
@@ -248,7 +281,7 @@ class Model(object):
             self._unstable = self._max_eval >= 0.0
 
     def _set_SE_fixed_pts(self):
-        self._I_E_ss = self._I_E_ss + self._I_ext
+        self._I_E_ss = self._I_E_ss0 + self._I_ext
         self._r_E_ss = self.phi_E(self._I_E_ss)
         self._S_E_ss = self._tau_E * self._r_E_ss * self._gamma / (1.0 + self._tau_E * self._r_E_ss * self._gamma)
 
@@ -275,6 +308,9 @@ class Model(object):
             self._w_II * self._tau_I * self.phi_I(I) - I
 
     def _analytic_FIC(self):
+        self._S_E_ss = np.copy(self._S_E_ss0)
+        self._I_E_ss = np.copy(self._I_E_ss0)
+        self._r_E_ss = np.copy(self._r_E_ss0)
         """ Analytically solves for the strength of feedback
             inhibition for each cortical area. """
         if self._SC is None:
@@ -424,7 +460,7 @@ class Model(object):
             return power
 
 
-    def power_spectrum_bold(self, freqs):
+    def power_spectrum_bold(self, freqs, tau=0):
         """Returns the power in each cortical area at the given frequencies
         for the specified neuronal population ('E' or 'I'). """
         if self._jacobian_bold is None: self.moments_method(BOLD=True)
@@ -439,8 +475,12 @@ class Model(object):
             #M2 = np.linalg.inv(self._jacobian_bold.T - 1.j * w * Id)
             #M3 = np.dot(M1, M2)
             M3 = np.dot(M1, M1.conj().T)
-            hemo_power = M3 * sig
-            power[:,:,i] = (np.dot(np.dot((self.hemo.B), hemo_power), (self.hemo.B.conj().T)))
+            if tau == 0:
+                self.hemo_power = M3 * sig
+                power[:, :, i] = (np.dot(np.dot((self.hemo.B), self.hemo_power), (self.hemo.B.conj().T)))
+            else:
+                self.hemo_power = sig * M3.dot(expm(self._jacobian_bold.T*tau))
+                #power[:, :, i] =
         return power
 
     def coherence(self, freqs, pop='E', tau=0.0):
@@ -520,6 +560,15 @@ class Model(object):
         else:
             return self._I0_E + self._I_ext + self._K_EE.dot(self._S_E) + self._K_IE.dot(self._S_I)
 
+
+    def exc_current_ext(self, I_ext):
+        """ Excitatory current for each cortical area. """
+        if self.withdelays:
+            return self._I0_E + I_ext + (self._K_EE * self._S_E_vect).sum(1) + self._K_IE.dot(self._S_I)
+        else:
+            return self._I0_E + I_ext + self._K_EE.dot(self._S_E) + self._K_IE.dot(self._S_I)
+
+
     def inh_current(self):
         """ Inhibitory current for each cortical area. """
         return self._I0_I + self._K_EI.dot(self._S_E) + self._K_II.dot(self._S_I)
@@ -546,11 +595,15 @@ class Model(object):
 
         return
 
-    def step(self, dt):
+    def step(self, dt, I_ext=None):
         """ Advance system synaptic state by time evolving for time dt. """
 
         # Update currents
-        self._I_E = self.exc_current()
+        if I_ext is None:
+            self._I_E = self.exc_current()
+        else:
+            self._I_E = self.exc_current_ext(I_ext)
+
         self._I_I = self.inh_current()
 
         self._r_E = self.phi_E(self._I_E)
@@ -605,7 +658,8 @@ class Model(object):
             return
 
     def integrate(self, t=30., dt=1e-4, n_save=10, include_BOLD=True,
-                  from_fixed=True, sim_seed=None, distance=None, velocity=None):
+                  from_fixed=True, sim_seed=None, distance=None, velocity=None,
+                  stimulation=None):
 
         """ Time evolves the system using Euler integration.
 
@@ -659,7 +713,11 @@ class Model(object):
                 self._S_E_mem[:, 0] = self._S_E
                 self._S_E_vect = self._S_E_mem[range(self._nc), self.steps_Delay]
 
-            self.step(dt)
+            if stimulation is None:
+                self.step(dt)
+            else:
+                self.step(dt, stimulation[i])
+
 
             if self.withdelays:
                 self._S_E_mem[:, 1:] = self._S_E_mem[:, :-1]
@@ -667,8 +725,8 @@ class Model(object):
             #if include_BOLD:
             #    self.hemo.step(dt, self._S_E)
 
-            if np.abs(self._S_E.mean() - self._S_E_ss[0]) > 0.1:
-                print self._S_E.mean()
+            #if np.abs(self._S_E.mean() - self._S_E_ss[0]) > 0.1:
+            #    print self._S_E.mean()
 
             # Update state variables
             if not (i % n_save):
@@ -712,6 +770,12 @@ class Model(object):
     def corr_bold_tau(self, tau=1.0):
         return self.cov_bold_tau(tau=tau) / np.sqrt(np.outer(self.var_bold, self.var_bold))
 
+    def analytical_gsr(self, cov_mat):
+        N = cov_mat.shape[0]
+        cov_sum = cov_mat.sum(1)
+        cov_sum_matrix = np.tile(cov_sum, (N, 1))
+        return cov_mat - (cov_sum_matrix * cov_sum_matrix.T) / cov_mat.sum()
+
     @property
     def Q(self):
         return self._Q
@@ -753,6 +817,25 @@ class Model(object):
         """Correlation matrix of linearized
         fluctuations about fixed point."""
         return self._corr_bold
+
+    @property
+    def cov_gsr(self):
+        return self.analytical_gsr(self._cov)
+
+
+    @property
+    def cov_bold_gsr(self):
+        return self.analytical_gsr(self._cov_bold)
+
+
+    @property
+    def corr_gsr(self):
+        return cov_to_corr(self.analytical_gsr(self._cov))
+
+
+    @property
+    def corr_bold_gsr(self):
+        return cov_to_corr(self.analytical_gsr(self._cov_bold), full_matrix=False)
 
 
     @property
@@ -864,6 +947,22 @@ class Model(object):
             return np.argsort(np.argsort(self._w_EE))
 
     @property
+    def J_NMDA_rec(self):
+        return self._J_NMDA_rec
+
+    @property
+    def J_NMDA_rec_nonlinear(self):
+        return self._J_NMDA_rec
+
+    @property
+    def J_NMDA_EE(self):
+        return self._J_NMDA_EE
+
+    @property
+    def J_NMDA_EI(self):
+        return self._J_NMDA_EI
+
+    @property
     def myelin(self):
         """Myelination values for each cortical area."""
         return self._myelin
@@ -885,21 +984,81 @@ class Model(object):
         """Myelination values for each cortical area."""
         self._myelin = m
 
-    @rec_scale.setter
-    def rec_scale(self, w):
-        self._J_NMDA_rec = self._apply_hierarchy(w[0], w[1])
+    @J_NMDA_rec.setter
+    def J_NMDA_rec(self, w):
+        if isinstance(w, float):
+            self._J_NMDA_rec = w
+        else:
+            if len(w) == self._nc:
+                self._J_NMDA_rec = np.array(w)
+            else:
+                self._J_NMDA_rec = self._apply_hierarchy(w[0], w[1])
+
+    @J_NMDA_rec_nonlinear.setter
+    def J_NMDA_rec_nonlinear(self, w):
+        if isinstance(w, float):
+            self._J_NMDA_rec = w
+        else:
+            if len(w) == self._nc:
+                self._J_NMDA_rec = np.array(w)
+            else:
+                self._J_NMDA_rec = w[0] + w[1] * self._hierarchy_gradient + w[2] * self._hierarchy_gradient ** 2
+
+    @J_NMDA_EI.setter
+    def J_NMDA_EI(self, w):
+        if isinstance(w, float):
+            self._J_NMDA_EI = w
+        else:
+            if len(w) == self._nc:
+                self._J_NMDA_EI = np.array(w)
+            else:
+                self._J_NMDA_EI = self._apply_hierarchy(w[0], w[1])
+
+    @J_NMDA_EE.setter
+    def J_NMDA_EE(self, w):
+        if isinstance(w, float):
+            self._J_NMDA_EE = w
+        else:
+            if len(w) == self._nc:
+                self._J_NMDA_EE = np.array(w)
+            else:
+                self._J_NMDA_EE = self._apply_hierarchy(w[0], w[1])
 
     @ee_scale.setter
     def ee_scale(self, w):
-        self._J_NMDA_EE = self._apply_hierarchy(w[0], w[1])
+        self._J_NMDA_EE = self._apply_hierarchy(w[0], -w[1])
+
+    @rec_scale.setter
+    def rec_scale(self, w):
+        self._J_NMDA_rec = self._apply_hierarchy(w[0], w[1])
 
     @ei_scale.setter
     def ei_scale(self, w):
         self._J_NMDA_EI = self._apply_hierarchy(w[0], w[1])
 
     @property
+    def network_mask(self):
+        return self._network_mask
+
+    @network_mask.setter
+    def network_mask(self, mask):
+        self._network_mask = mask
+
+    @property
     def FFI_mask(self):
         return self._FFI
+
+    @property
+    def FFE_mask(self):
+        return self._FFE
+
+    @FFI_mask.setter
+    def FFI_mask(self, scale):
+        self._FFI = 1.0 - (1.0 - self._network_mask) * (1.0 - scale)
+
+    @FFE_mask.setter
+    def FFE_mask(self, scale):
+        self._FFE = 1.0 - self._network_mask * (1.0 - scale)
 
     @property
     def FFI_scale(self):

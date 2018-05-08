@@ -150,8 +150,13 @@ class Cifti():
         #if stx:
         #    n_regions = len(self.extensions[0][2])-2
         #    self.extensions[0][2][3][0].text.split('\n')[0].split() # coords
+        #    import pdb; pdb.set_trace()
 
         return label_info
+
+    def stx_offset(self):
+        return int(self.extensions[0][2][3].get('IndexOffset'))
+
 
 
     def set_pdata(self, data, dlabel):

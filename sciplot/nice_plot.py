@@ -2,8 +2,8 @@ from subplot_wrapper import SubPlot
 import numpy as np
 from copy import copy
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from tools.stats import lm
-from scipy.stats import pearsonr
+from utils.stats import lm
+from scipy.stats import pearsonr, spearmanr
 import matplotlib as mpl
 import colormaps
 
@@ -136,12 +136,16 @@ class NicePlot(SubPlot):
 
 
     def reg_plot(self, y, x, colors_scatter=None, colors_line=None,
-                 text_fs=6, text_loc=(0.5, 1.0), text_fw='bold', alpha=0.2,  *args, **kwargs):
+                 text_fs=6, text_loc=(0.5, 1.0), corr_type='pearson', text_fw='bold', alpha=0.2,  *args, **kwargs):
 
         #kwargs.setdefault('alpha', 0.2)
         self.plot(y, x, scatter=True, colors=colors_scatter, tight=False, alpha=alpha, *args, **kwargs)
         beta, pval, tval = lm(y, x)
-        r, p = pearsonr(x, y)
+        if corr_type == 'pearson':
+            r, p = pearsonr(x, y)
+        else:
+            r, p = spearmanr(x, y)
+
         self.plot(beta[1] + x*beta[0], x, colors=colors_line, tight=False, alpha=0.7, *args, **kwargs)
 
         if p < 0.001:

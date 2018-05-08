@@ -1,7 +1,7 @@
 from lxml import etree
 import matplotlib.image as mpimg
 from os import system
-from utils.cifti import Cifti
+from mri.cifti import Cifti
 import os
 
 class Brain():

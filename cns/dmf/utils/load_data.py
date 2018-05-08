@@ -18,7 +18,7 @@ def load_model_params():
 
     return params
 
-
+'''
 def load_hagmann(file_path):
 
     human_66 = loadmat(file_path)
@@ -88,3 +88,4 @@ def load_hcp(data_dir, hemi="L"):
         raise NotImplementedError("Unrecognized hemisphere argument")
 
     return SC, FC, areas, myelin, networks
+'''

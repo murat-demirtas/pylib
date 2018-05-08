@@ -65,6 +65,8 @@ class Dmf():
         self.eval_1 = 0.5 * T + sym.sqrt((T ** 2) / 4. - D)
         self.eval_2 = 0.5 * T - sym.sqrt((T ** 2) / 4. - D)
 
+        import pdb; pdb.set_trace()
+
     def phase_diagram_compact(self, j_min = 0.001, j_max=5.0, n=100):
         jnei_vect = np.linspace(j_min, j_max, n)
         cp = 0.1*np.ones(len(jnei_vect)+1) # critical points

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.special import erf
 from utils.transform import subdiag, squareform
-from scipy.stats import gamma
+from scipy.stats import gamma, spearmanr
 
 """
 linearization function for myelin
@@ -18,7 +18,14 @@ def normalize_sc(x):
     x /= x.max()
     return x
 
-
+def cov_to_corr(cov):
+    """ Generate correlation matrix from covariance matrix.
+        full_matrix: set True if cov is the full 2n x 2n covariance
+        matrix and you wish to return the covariance matrix of
+        the upper left quadrant (i.e. the E-E block) """
+    cov_ii = np.diag(cov)
+    norm2 = np.outer(cov_ii, cov_ii)
+    return cov / np.sqrt(norm2)
 
 def redistributed_sc(sc, hemi='LR'):
     if hemi == 'LR':
