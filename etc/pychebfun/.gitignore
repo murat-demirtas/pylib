@@ -1,6 +1,0 @@
-# ignore emacs backups
-*~
-
-# ignore compiled Python code and the build directory.
-*.pyc
-build
