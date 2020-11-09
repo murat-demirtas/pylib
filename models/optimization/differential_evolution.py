@@ -1,46 +1,58 @@
 import numpy as np
+import h5py
 from scipy.optimize import differential_evolution
 from abc import ABCMeta, abstractmethod
 
 
 class Dev:
     __metaclass__ = ABCMeta
-    def __init__(self, parameters, bounds, verbose=True):
+    def __init__(self, model, objective, pdict, verbose=True):
 
         self.verbose = verbose
-        self.set_model()
 
-        self.parameters = parameters
+        self.model = model
+        self.objective = objective
+        self.parameter_dictionary = pdict
+        self.parameters = list(self.parameter_dictionary.keys())
         self.bounds = []
-        for ii in range(len(parameters)):
-            self.bounds += bounds[parameters[ii]]
+        for i in range(len(self.parameters)):
+            self.bounds += self.parameter_dictionary[self.parameters[i]]
+            
+        self.opt_params = None
+        self.opt_fit = None
 
     @abstractmethod
-    def set_model(self):
+    def cost_function(self):
         """
 
-        :return:
+        :return: cost to minimize
         """
-
-    @abstractmethod
+        pass
+        
     def sample(self, theta):
         """
-
+        Updates model given the sample
+        
         :param theta:
         :return:
         """
+        pind = 0
+        for p in self.parameters:
+            pl = len(self.parameter_dictionary[p])
+            setattr(self.model, p, theta[pind:pind+pl])
+            pind+=pl
 
     def opt_func(self, theta):
         self.sample(theta)
-        return self.cost()
+        return self.cost_function()
 
-    def run(self, filename):
-        results = differential_evolution(self.opt_func, self.mybounds, disp=True)
-        opt_params = results.x
-        opt_fit = -results.fun
+    def run(self, filename = None, **kwargs):
+        self.results = differential_evolution(self.opt_func, self.bounds, disp=self.verbose, **kwargs)
+        self.opt_params = self.results.x
+        self.opt_fit = -self.results.fun
 
-        data = Data()
-        fout = data.save(filename)
-        fout.create_dataset('optimal_fit', data=opt_fit)
-        fout.create_dataset('optimal_parameters', data=opt_params)
-        fout.close()
+        if filename is not None:
+            fout = h5py.File(filename, 'w')
+            fout.create_dataset('optimal_fit', data=self.opt_fit)
+            fout.create_dataset('optimal_parameters', data=self.opt_params)
+            fout.close()

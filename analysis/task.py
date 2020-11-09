@@ -39,6 +39,9 @@ def read_ev(path, filename, t_scan, fs=0.72):
     return binary_events
 
 def plot_tasks(ax_in, tasks, task_timings, colors, task_amp=1.0):
+    """
+    Plotting task block on an existing figure
+    """
     for i in range(len(tasks)):
         ax_in.plot(task_timings[i]*task_amp, lw = 2, color=colors[i])
         label_locs = np.where(task_timings[i]==1)[0]

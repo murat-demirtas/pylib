@@ -117,9 +117,10 @@ class HopfModel():
         self._jacobian = self._compute_jacobian()
 
         # Eigenvalues of Jacobian matrix
-        evals, L = eig(self._jacobian)
+        evals, evects = eig(self._jacobian)
 
         self.evals = evals
+        self.evects = evects
 
         # Check stability using eigenvalues
         self._unstable = False
@@ -136,8 +137,8 @@ class HopfModel():
         else:
             # use eigen-decomposition to solve
             evals_cc = np.conj(evals)
-            L_dagger = np.conj(L).T
-            inv_L = np.linalg.inv(L)
+            L_dagger = np.conj(evects).T
+            inv_L = np.linalg.inv(evects)
             inv_L_dagger = np.linalg.inv(L_dagger)
             Q_tilde = inv_L.dot(self._Q.dot(inv_L_dagger))
             denom_lambda_i = np.tile(evals.reshape((1, 2 * self.nc)).T,
@@ -145,7 +146,7 @@ class HopfModel():
             denom_lambda_conj_j = np.tile(evals_cc, (2 * self.nc, 1))
             total_denom = denom_lambda_i + denom_lambda_conj_j
             M = -Q_tilde / total_denom
-            self._cov = L.dot(M.dot(L_dagger)).real
+            self._cov = evects.dot(M.dot(L_dagger)).real
 
     def integrate(self, t=30., dt=0.1, fs=2):
         # Simulation parameters
