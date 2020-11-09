@@ -4,7 +4,7 @@ from copy import copy
 from matplotlib import cm
 import matplotlib.colors as clrs
 import os
-from ..analysis.cifti import Gifti, Cifti
+from analysis.cifti import Gifti, Cifti
 
 class Brain():
     def __init__(self, surface='veryinflated', parc='glasser'):
@@ -58,7 +58,10 @@ class Brain():
             self.groups = {'L': np.where(hemis == 0.0)[0],
                            'R': np.where(hemis == 1.0)[0]}
 
-        zoom = [170.0, 180.0, 200.0, 200.0, 225.0, 225.0]
+        if surface == 'midthickness':
+            zoom = [130.0, 140.0, 200.0, 200.0, 225.0, 225.0]
+        else:
+            zoom = [170.0, 180.0, 200.0, 200.0, 225.0, 225.0]
         self.views = {'L':
                           {'medial': [0.0, -90.0, zoom[0]],
                            'sagittal': [0.0, 90.0, zoom[1]],
@@ -141,7 +144,7 @@ class Brain():
                     scalar_dummy = np.zeros(scalar.shape)
                     scalar_dummy[scalar == ii + 1] = 1.0
                     s = mlab.pipeline.triangular_mesh_source(vertex[:, 0], vertex[:, 1], vertex[:, 2], triangle, scalars=scalar_dummy)
-                    cont = mlab.pipeline.contour_surface(s, contours=2)
+                    cont = mlab.pipeline.contour_surface(s, contours=2, color = tuple([0.0,0.0,0.0]))
                     cont.actor.mapper.interpolate_scalars_before_mapping = True
                     cont.actor.property.line_width = 2.0
 
@@ -237,7 +240,6 @@ class Brain():
              threshold = None, vrange = None,
              hemi_label = True, title = None,
              borders = None,
-             labels = None, label_orientation = None,
              latex = False,
              dpi=100):
         '''
@@ -246,11 +248,9 @@ class Brain():
 
         self.ax = ax
         self.cmap = cmap
-        self.label_ind = labels
         self.borders = borders
         self.threshold = threshold
         self.vrange = vrange
-        self.label_orientation = label_orientation
         self.set_data(data)
 
         img = self.montage(montage, dpi)

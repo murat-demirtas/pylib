@@ -3,7 +3,6 @@ from os import system
 import nibabel as nib
 import os
 
-
 def plot_brain(ax, data=None, pscalar='default',
                scene='pscalar_lr',
                hemi_label=True, title=None):
